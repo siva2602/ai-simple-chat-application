@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Simple Chat</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: #1a1a2e;
+      color: #eee;
+    }
+    h1 {
+      text-align: center;
+      padding: 1rem;
+      margin: 0;
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+    #messages {
+      flex: 1;
+      min-height: 200px;
+      overflow-y: auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .msg {
+      max-width: 85%;
+      padding: 0.6rem 1rem;
+      border-radius: 1rem;
+      line-height: 1.4;
+    }
+    .msg.user {
+      align-self: flex-end;
+      background: #16213e;
+      border-bottom-right-radius: 0.25rem;
+    }
+    .msg.assistant {
+      align-self: flex-start;
+      background: #0f3460;
+      border-bottom-left-radius: 0.25rem;
+    }
+    .msg .role {
+      font-size: 0.7rem;
+      opacity: 0.8;
+      margin-bottom: 0.25rem;
+    }
+    #form {
+      display: flex;
+      gap: 0.5rem;
+      padding: 1rem;
+      border-top: 1px solid #333;
+    }
+    #input {
+      flex: 1;
+      padding: 0.75rem 1rem;
+      border: 1px solid #444;
+      border-radius: 0.5rem;
+      background: #16213e;
+      color: #eee;
+      font-size: 1rem;
+    }
+    #input:focus {
+      outline: none;
+      border-color: #0f3460;
+    }
+    #send {
+      padding: 0.75rem 1.25rem;
+      border: none;
+      border-radius: 0.5rem;
+      background: #0f3460;
+      color: #eee;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    #send:hover { background: #1a4a7a; }
+    #send:disabled { opacity: 0.6; cursor: not-allowed; }
+    .error { color: #f88; padding: 0.5rem; }
+  </style>
+</head>
+<body>
+  <h1>AI Simple Chat</h1>
+  <div id="messages"></div>
+  <form id="form">
+    <input type="text" id="input" placeholder="Type a message... (click Send to submit)" autocomplete="off" />
+    <button type="button" id="send">Send</button>
+  </form>
+  <div id="error" class="error" style="display: none;"></div>
+
+  <script>
+    const messages_el = document.getElementById("messages");
+    const form_el = document.getElementById("form");
+    const input_el = document.getElementById("input");
+    const send_el = document.getElementById("send");
+    const error_el = document.getElementById("error");
+
+    function showError(msg) {
+      error_el.textContent = msg;
+      error_el.style.display = "block";
+    }
+    function hideError() {
+      error_el.style.display = "none";
+    }
+
+    function appendMessage(role, content) {
+      const div = document.createElement("div");
+      div.className = "msg " + role;
+      div.innerHTML = "<span class=\"role\">" + (role === "user" ? "You" : "Assistant") + "</span><div>" + escapeHtml(content) + "</div>";
+      messages_el.appendChild(div);
+      // Force scroll to bottom after paint so sender message stays visible
+      requestAnimationFrame(() => {
+        messages_el.scrollTop = messages_el.scrollHeight;
+      });
+    }
+
+    function escapeHtml(text) {
+      const span = document.createElement("span");
+      span.textContent = text;
+      return span.innerHTML;
+    }
+
+    async function doSend() {
+      const text = input_el.value.trim();
+      if (!text) return;
+      input_el.value = "";
+      send_el.disabled = true;
+      hideError();
+      appendMessage("user", text);
+
+      try {
+        const res = await fetch("/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: text }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showError(data.error || "Request failed");
+          return;
+        }
+        // No auto-reply; only show assistant message when reply is present (next flow)
+        if (data.reply) {
+          appendMessage("assistant", data.reply);
+        }
+      } catch (err) {
+        showError(err.message || "Network error");
+      } finally {
+        send_el.disabled = false;
+        input_el.focus();
+      }
+    }
+
+    // Only the Send button sends; Enter is ignored (no form submit)
+    send_el.addEventListener("click", doSend);
+    form_el.addEventListener("submit", (e) => e.preventDefault());
+  </script>
+</body>
+</html>
